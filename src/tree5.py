@@ -177,7 +177,7 @@ class MutationTree:
                 label = f"{node.id}: {node.sequence}"
                 dot.node(str(node.id), label)
             else:
-                label = f"{node.id}: {node.sequence} (verstorben)"
+                label = f"{node.id}: {node.sequence} (†)"
                 dot.node(str(node.id), label, fontcolor="red")
 
         # Kanten hinzufügen
@@ -375,7 +375,7 @@ def main() -> None:
     # String-Länge 10, 5 Generationen, max_population=100, 10% Fehlerrate, 40% Eliminationsrate
     config = Config(
         initial_length=10,
-        generations=7,
+        generations=25,
         max_population=15,
         error_rate=0.1,
         elimination_rate=0.4,

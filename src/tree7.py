@@ -186,7 +186,7 @@ class MutationTree:
                 label = f"{node.id}: {node.sequence}"
                 dot.node(str(node.id), label)
             else:
-                label = f"{node.id}: {node.sequence} (verstorben)"
+                label = f"{node.id}: {node.sequence} (†)"
                 dot.node(str(node.id), label, fontcolor="red")
 
         # Kanten hinzufügen
