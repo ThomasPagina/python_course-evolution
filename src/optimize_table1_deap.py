@@ -1,6 +1,7 @@
 import random
 from typing import List
 from deap import base, creator, tools, algorithms
+import matplotlib.pyplot as plt
 
 # --- Data Models ---
 class Guest:
@@ -90,9 +91,25 @@ def run_deap_evolution():
     score = evaluate(best)[0]
     return best_tables, score
 
+# --- Visualization ---
+def plot_tables(tables):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    y_offset = 1
+    for i, table in enumerate(tables):
+        for j, guest in enumerate(table):
+            ax.text(j, -i * y_offset, guest.name, bbox=dict(facecolor='lightblue', edgecolor='black'), ha='center')
+        ax.plot([0, len(table) - 1], [-i * y_offset, -i * y_offset], 'k--', lw=1)
+    ax.set_xlim(-1, max(len(t) for t in tables))
+    ax.set_ylim(-y_offset * len(tables), 1)
+    ax.axis('off')
+    plt.title("Seating Arrangement")
+    plt.tight_layout()
+    plt.show()
+
 # --- Run & Output ---
 if __name__ == "__main__":
     final_tables, violations = run_deap_evolution()
     print(f"Constraint violations: {violations}\n")
     for i, table in enumerate(final_tables):
         print(f"Table {i + 1}: {table}")
+    plot_tables(final_tables)
