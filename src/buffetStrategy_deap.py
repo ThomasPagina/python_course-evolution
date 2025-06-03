@@ -3,6 +3,9 @@ from typing import List
 from deap import base, creator, tools, algorithms
 import matplotlib.pyplot as plt
 
+GENERATIONS = 30
+POP_SIZE = 10
+
 # --- Buffet Setup ---
 class Dish:
     def __init__(self, name: str, value: int, popularity: int):
@@ -59,11 +62,11 @@ def evaluate_wrapper(individual, population):
     return evaluate(individual, buffet, population)
 
 def run_deap():
-    population = toolbox.population(n=20)
+    population = toolbox.population(n=POP_SIZE)
     for ind in population:
         ind.fitness.values = evaluate_wrapper(ind, population)
 
-    for gen in range(30):
+    for gen in range(GENERATIONS):
         offspring = toolbox.select(population, len(population))
         offspring = list(map(toolbox.clone, offspring))
 
