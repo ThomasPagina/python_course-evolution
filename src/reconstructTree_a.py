@@ -1,28 +1,25 @@
 """
-tree_reconstruction_single.py
+reconstructTree_a.py
 
-Dieses Python-Programm lädt eine JSON-Datei, die einen Mutation-Tree beschreibt, und
-rekonstruiert durch gezielte, iterative Transformationen aus einem einzelnen zufälligen
-Startbaum einen plausiblen Baum für die lebendigen Knoten (alive=true). 
+This Python program loads a JSON file describing a mutation tree and reconstructs,
+through targeted, iterative transformations from a single random starting tree,
+a plausible tree for the living nodes (alive=true).
 
-Die Hauptidee:
-1. Erzeuge einmalig einen zufälligen binären Startbaum aus allen lebendigen Knoten.
-2. Führe in einer Schleife folgende Schritte durch, solange sich der Baum verändert:
-   a) Suche eine ungültige Kante (Leaf-first). 
-      • Versuche einen Parent-Child-Swap, der danach keine Invaliditätsverletzungen mehr hat.
-      • Falls Swap nicht möglich oder unzureichend, führe einen „Reattach“ des fehlerhaften Blatts durch.
-   b) Falls keine Invaliditäten mehr vorliegen, prüfe auf Overflow (Knoten mit >2 Kindern):
-      • Füge zwischen zwei der engsten Kinder einen hypothetischen Knoten ein.
-   c) Falls weder Invalidität noch Overflow mehr existiert, versuche, einen redundanten
-      hypothetischen Knoten zu entfernen (Bypass).
-3. Sobald keine der drei Operationen (a–c) mehr eine Veränderung bewirkt, ist der Baum
-   stabil und wird als Endergebnis ausgegeben.
+Main idea:
+1. Generate a single random binary starting tree from all living nodes.
+2. In a loop, perform the following steps as long as the tree changes:
+    a) Search for an invalid edge (leaf-first).
+        • Try a parent-child swap that results in no more invalidity violations.
+        • If a swap is not possible or insufficient, perform a "reattach" of the faulty leaf.
+    b) If there are no more invalidities, check for overflow (nodes with >2 children):
+        • Insert a hypothetical node between the two closest children.
+    c) If neither invalidity nor overflow exists, try to remove a redundant
+        hypothetical node (bypass).
+3. As soon as none of the three operations (a–c) causes any further change, the tree
+    is stable and is output as the final result.
 
-Grafische Ausgabe: Am Ende wird der finale Baum mit Graphviz visualisiert. 
-Hypothetische Knoten werden im Label durch einen vorangestellten Asterisk (*) markiert.
-
-Author: Dein Name
-Date: 2025-06-02
+Graphical output: At the end, the final tree is visualized with Graphviz.
+Hypothetical nodes are marked in the label with a leading asterisk (*).
 """
 
 import json
@@ -31,17 +28,17 @@ import copy
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-import graphviz  # pip install graphviz erforderlich
+import graphviz  # pip install graphviz required
 
 
 # ---------------------------
-#  Konfigurations-Dataclass
+#  Configuration Dataclass
 # ---------------------------
 
 @dataclass
 class Config:
     """
-    Konfigurationsparameter für die Baumrekonstruktion.
+    Configuration parameters for tree reconstruction.
     """
     input_path: str = "mutation_tree.json"
     seed: Optional[int] = None
@@ -49,14 +46,14 @@ class Config:
 
 
 # ---------------------------
-#  Datenstrukturen
+#  Data Structures
 # ---------------------------
 
 class Node:
     """
-    Repräsentiert einen Knoten im Baum.
-    Kann ein originaler (lebendiger) Knoten aus der JSON-Datei sein
-    oder ein hypothetischer Knoten, der während der Restrukturierung hinzugefügt wird.
+    Represents a node in the tree.
+    Can be an original (living) node from the JSON file
+    or a hypothetical node added during restructuring.
     """
     def __init__(self, node_id: int, sequence: str, is_hypothetical: bool = False) -> None:
         self.id: int = node_id
@@ -70,8 +67,8 @@ class Node:
 
 class Tree:
     """
-    Repräsentiert einen Baum aus Node-Objekten.
-    Eltern-Kind-Beziehungen werden über Dictionaries gespeichert.
+    Represents a tree of Node objects.
+    Parent-child relationships are stored in dictionaries.
     """
     def __init__(
         self,
@@ -80,9 +77,9 @@ class Tree:
         children_map: Dict[int, List[int]]
     ) -> None:
         """
-        :param nodes: Dict von node_id → Node-Instanz (inkl. hypothetischer Knoten)
-        :param parent_map: Dict von node_id → parent_id oder None (wenn Wurzel)
-        :param children_map: Dict von node_id → Liste der children_ids
+        :param nodes: Dict of node_id → Node instance (including hypothetical nodes)
+        :param parent_map: Dict of node_id → parent_id or None (if root)
+        :param children_map: Dict of node_id → list of children_ids
         """
         self.nodes: Dict[int, Node] = nodes
         self.parent_map: Dict[int, Optional[int]] = parent_map
@@ -90,7 +87,7 @@ class Tree:
 
     def copy(self) -> "Tree":
         """
-        Erzeugt eine tiefe Kopie des Baumes (keine Seiteneffekte).
+        Creates a deep copy of the tree (no side effects).
         """
         new_nodes = {
             nid: Node(nid, node.sequence, node.is_hypothetical)
@@ -102,7 +99,7 @@ class Tree:
 
     def get_root(self) -> Optional[int]:
         """
-        Gibt die node_id der Wurzel zurück (parent_map[node_id] is None).
+        Returns the node_id of the root (parent_map[node_id] is None).
         """
         for nid, pid in self.parent_map.items():
             if pid is None:
@@ -110,16 +107,16 @@ class Tree:
         return None
 
     def all_node_ids(self) -> List[int]:
-        """Gibt alle node_ids in diesem Baum zurück."""
+        """Returns all node_ids in this tree."""
         return list(self.nodes.keys())
 
     def is_leaf(self, node_id: int) -> bool:
-        """Prüft, ob ein Knoten ein Blatt (Leaf) ist."""
+        """Checks if a node is a leaf."""
         return len(self.children_map.get(node_id, [])) == 0
 
     def as_edge_list(self) -> List[Tuple[int, int]]:
         """
-        Gibt alle Kanten (parent_id, child_id) als Liste von Tupeln zurück.
+        Returns all edges (parent_id, child_id) as a list of tuples.
         """
         edges: List[Tuple[int, int]] = []
         for child, parent in self.parent_map.items():
@@ -129,7 +126,7 @@ class Tree:
 
     def has_any_invalid_edge(self) -> bool:
         """
-        Prüft, ob es irgendeine Kante (p, c) gibt, bei der die Mutations-Constraint verletzt wird.
+        Checks if there is any edge (p, c) where the mutation constraint is violated.
         """
         for parent_id, child_id in self.as_edge_list():
             seq_p = self.nodes[parent_id].sequence
@@ -140,8 +137,8 @@ class Tree:
 
     def is_valid_structure(self) -> bool:
         """
-        Prüft, ob der Baum eine gültige Struktur ohne Zyklen bildet (zusammenhängend).
-        (Nur Struktur, nicht Mutations-Constraints.)
+        Checks if the tree forms a valid structure without cycles (connected).
+        (Structure only, not mutation constraints.)
         """
         visited: Set[int] = set()
         root = self.get_root()
@@ -152,7 +149,7 @@ class Tree:
         while stack:
             current = stack.pop()
             if current in visited:
-                return False  # Zyklus
+                return False  # Cycle
             visited.add(current)
             for child in self.children_map.get(current, []):
                 stack.append(child)
@@ -161,12 +158,12 @@ class Tree:
 
 
 # ---------------------------
-#  Hilfsfunktionen
+#  Helper Functions
 # ---------------------------
 
 def load_json_nodes(filepath: str) -> List[Dict]:
     """
-    Liest die JSON-Datei ein und gibt die Liste der Knoten-Dictionaries zurück.
+    Reads the JSON file and returns the list of node dictionaries.
     """
     with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -175,8 +172,8 @@ def load_json_nodes(filepath: str) -> List[Dict]:
 
 def filter_alive_nodes(raw_nodes: List[Dict]) -> Dict[int, str]:
     """
-    Filtert aus den rohen JSON-Knoten diejenigen heraus, die alive=true sind.
-    Liefert ein Dict: node_id → sequence.
+    Filters from the raw JSON nodes those with alive=true.
+    Returns a dict: node_id → sequence.
     """
     alive: Dict[int, str] = {}
     for entry in raw_nodes:
@@ -189,8 +186,8 @@ def filter_alive_nodes(raw_nodes: List[Dict]) -> Dict[int, str]:
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     """
-    Berechnet die Levenshtein-Distanz zwischen zwei Strings s1 und s2.
-    Laufzeit: O(len(s1) * len(s2))
+    Computes the Levenshtein distance between two strings s1 and s2.
+    Runtime: O(len(s1) * len(s2))
     """
     len1, len2 = len(s1), len(s2)
     dp = [[0] * (len2 + 1) for _ in range(len1 + 1)]
@@ -203,17 +200,17 @@ def levenshtein_distance(s1: str, s2: str) -> int:
         for j in range(1, len2 + 1):
             cost = 0 if s1[i - 1] == s2[j - 1] else 1
             dp[i][j] = min(
-                dp[i - 1][j] + 1,       # Löschung
-                dp[i][j - 1] + 1,       # Einfügung
-                dp[i - 1][j - 1] + cost # Ersetzung
+                dp[i - 1][j] + 1,       # Deletion
+                dp[i][j - 1] + 1,       # Insertion
+                dp[i - 1][j - 1] + cost # Substitution
             )
     return dp[len1][len2]
 
 
 def is_valid_mutation(parent_seq: str, child_seq: str) -> bool:
     """
-    Prüft, ob child_seq durch inkrementelle Buchstabenänderungen
-    aus parent_seq hervorgegangen sein kann (Buchstabe nur vorwärts im Alphabet).
+    Checks if child_seq could have arisen from parent_seq by incremental letter changes
+    (letter only moves forward in the alphabet).
     """
     for c_p, c_c in zip(parent_seq, child_seq):
         if ord(c_c) < ord(c_p):
@@ -222,13 +219,13 @@ def is_valid_mutation(parent_seq: str, child_seq: str) -> bool:
 
 
 # ---------------------------
-#  Initialer Zufallsbaum
+#  Initial Random Tree
 # ---------------------------
 
 def generate_random_tree(alive_sequences: Dict[int, str]) -> Tree:
     """
-    Erzeugt zufällig einen Startbaum aus allen lebendigen Knoten,
-    wobei jeder Knoten maximal zwei Kinder hat und es genau eine Wurzel gibt.
+    Randomly generates a starting tree from all living nodes,
+    where each node has at most two children and there is exactly one root.
     """
     real_ids = list(alive_sequences.keys())
     random.shuffle(real_ids)
@@ -241,12 +238,12 @@ def generate_random_tree(alive_sequences: Dict[int, str]) -> Tree:
         nodes[rid] = Node(rid, alive_sequences[rid], is_hypothetical=False)
         children_map[rid] = []
 
-    # Der erste Knoten wird Wurzel
+    # The first node becomes the root
     root = real_ids[0]
     parent_map[root] = None
     eligible_parents: Set[int] = {root}
 
-    # Weise jeden weiteren Knoten zufällig einem Parent mit <2 Kindern zu
+    # Assign each further node randomly to a parent with <2 children
     for child_id in real_ids[1:]:
         parent_id = random.choice(list(eligible_parents))
         parent_map[child_id] = parent_id
@@ -260,15 +257,15 @@ def generate_random_tree(alive_sequences: Dict[int, str]) -> Tree:
 
 
 # ---------------------------
-#  Suche ungültige Kante (Leaf-first)
+#  Find Invalid Edge (Leaf-first)
 # ---------------------------
 
 def find_invalid_edge_leaf_first(tree: Tree) -> Optional[Tuple[int, int]]:
     """
-    Zuerst Blätter prüfen: Wenn (p, leaf) invalid ist, zurückgeben.
-    Sonst interne Knoten (erste gefundene invalid Kante).
+    First check leaves: If (p, leaf) is invalid, return it.
+    Otherwise, check internal nodes (first found invalid edge).
     """
-    # 1) Blätter prüfen
+    # 1) Check leaves
     for node_id in tree.all_node_ids():
         if tree.is_leaf(node_id):
             parent_id = tree.parent_map.get(node_id)
@@ -279,7 +276,7 @@ def find_invalid_edge_leaf_first(tree: Tree) -> Optional[Tuple[int, int]]:
             if not is_valid_mutation(seq_p, seq_c):
                 return parent_id, node_id
 
-    # 2) Andere Kanten prüfen
+    # 2) Check other edges
     for parent_id, child_id in tree.as_edge_list():
         if tree.is_leaf(child_id):
             continue
@@ -292,23 +289,23 @@ def find_invalid_edge_leaf_first(tree: Tree) -> Optional[Tuple[int, int]]:
 
 
 # ---------------------------
-#  Reattach mit Root-Erweiterung
+#  Reattach with Root Extension
 # ---------------------------
 
 def reattach_leaf(tree: Tree, parent_id: int, child_id: int, next_hypo_id: int) -> Tuple[Tree, int]:
     """
-    Löst ein fehlerhaftes Blatt child_id von parent_id:
-    1. Versucht, child_id an einen validen Schwesterknoten von parent_id anzuhängen.
-    2. Falls parent_id direkt unter Root steht (gp=None), wird ein neuer hypothetischer 
-       Root erzeugt, der parent_id und child_id vereint.
-    3. Sonst: Hänge child_id als Schwester von parent_id unter dessen Großeltern.
+    Detaches a faulty leaf child_id from parent_id:
+    1. Tries to attach child_id to a valid sibling of parent_id.
+    2. If parent_id is directly under root (gp=None), creates a new hypothetical 
+       root that unites parent_id and child_id.
+    3. Otherwise: attaches child_id as a sibling of parent_id under its grandparent.
     """
     new_tree = tree.copy()
     p = parent_id
     c = child_id
     gp = new_tree.parent_map.get(p)
 
-    # 1) Versuche, c an einen validen Schwesterknoten von p anzuhängen
+    # 1) Try to attach c to a valid sibling of p
     if gp is not None:
         siblings = [s for s in new_tree.children_map.get(gp, []) if s != p]
         for s in siblings:
@@ -320,13 +317,13 @@ def reattach_leaf(tree: Tree, parent_id: int, child_id: int, next_hypo_id: int) 
                 new_tree.children_map[s].append(c)
                 return new_tree, next_hypo_id
 
-    # 2) Falls p direkt unter Root steht (gp=None), neuen hypothetischen Root anlegen
+    # 2) If p is directly under root (gp=None), create new hypothetical root
     if gp is None:
         old_root = p
         seq_old = new_tree.nodes[old_root].sequence
         seq_c = new_tree.nodes[c].sequence
 
-        # Hypothetischen Root h erstellen
+        # Create hypothetical root h
         h_id = next_hypo_id
         next_hypo_id -= 1
         hypo_seq = "".join(
@@ -335,20 +332,20 @@ def reattach_leaf(tree: Tree, parent_id: int, child_id: int, next_hypo_id: int) 
         new_tree.nodes[h_id] = Node(h_id, hypo_seq, is_hypothetical=True)
         new_tree.children_map[h_id] = []
 
-        # Entferne c von p
+        # Remove c from p
         new_tree.children_map[p].remove(c)
 
-        # h wird neue Wurzel (parent=None)
+        # h becomes new root (parent=None)
         new_tree.parent_map[h_id] = None
 
-        # Assigniere old_root und c als Kinder von h
+        # Assign old_root and c as children of h
         new_tree.parent_map[old_root] = h_id
         new_tree.parent_map[c] = h_id
         new_tree.children_map[h_id].extend([old_root, c])
 
         return new_tree, next_hypo_id
 
-    # 3) Ansonsten c als Schwester von p unter gp ansetzen
+    # 3) Otherwise, attach c as sibling of p under gp
     new_tree.children_map[p].remove(c)
     new_tree.parent_map[c] = gp
     new_tree.children_map[gp].append(c)
@@ -356,13 +353,13 @@ def reattach_leaf(tree: Tree, parent_id: int, child_id: int, next_hypo_id: int) 
 
 
 # ---------------------------
-#  Swap-Funktion (Parent ↔ Child)
+#  Swap Function (Parent ↔ Child)
 # ---------------------------
 
 def swap_parent_child(tree: Tree, parent_id: int, child_id: int) -> Tree:
     """
-    Tauscht die Rollen von parent_id und child_id:
-    child_id wird Parent von parent_id; Struktur wird nur abgebrochen, wenn ein Zyklus entstünde.
+    Swaps the roles of parent_id and child_id:
+    child_id becomes parent of parent_id; structure is only broken if a cycle would result.
     """
     new_tree = tree.copy()
 
@@ -379,44 +376,44 @@ def swap_parent_child(tree: Tree, parent_id: int, child_id: int) -> Tree:
                     stack.append(ch)
         return False
 
-    # Zyklus vermeiden
+    # Avoid cycles
     if is_descendant(child_id, parent_id):
         return new_tree
 
     old_parent = new_tree.parent_map[parent_id]
     old_children = list(new_tree.children_map.get(child_id, []))
 
-    # 1) Entferne parent_id aus den Kindern von old_parent
+    # 1) Remove parent_id from children of old_parent
     if old_parent is not None:
         new_tree.children_map[old_parent].remove(parent_id)
 
-    # 2) Setze child_id an Stelle von parent_id
+    # 2) Set child_id in place of parent_id
     new_tree.parent_map[child_id] = old_parent
     if old_parent is not None:
         new_tree.children_map[old_parent].append(child_id)
 
-    # 3) parent_id wird Kind von child_id
+    # 3) parent_id becomes child of child_id
     new_tree.parent_map[parent_id] = child_id
 
-    # 4) Hänge alte Kinder von child_id (außer parent_id) an parent_id
+    # 4) Attach old children of child_id (except parent_id) to parent_id
     for ch in old_children:
         if ch != parent_id:
             new_tree.parent_map[ch] = parent_id
             new_tree.children_map[parent_id].append(ch)
 
-    # 5) Setze Kinderliste von child_id neu auf [parent_id]
+    # 5) Set children list of child_id to [parent_id]
     new_tree.children_map[child_id] = [parent_id]
 
     return new_tree
 
 
 # ---------------------------
-#  Overflow und Hypothetik
+#  Overflow and Hypotheticals
 # ---------------------------
 
 def find_node_with_overflow(tree: Tree) -> Optional[int]:
     """
-    Gibt die node_id eines Knotens mit >2 Kindern zurück (Overflow), oder None, falls keiner existiert.
+    Returns the node_id of a node with >2 children (overflow), or None if none exists.
     """
     for nid, children in tree.children_map.items():
         if len(children) > 2:
@@ -426,8 +423,8 @@ def find_node_with_overflow(tree: Tree) -> Optional[int]:
 
 def add_hypothetical_for_overflow(tree: Tree, next_hypo_id: int) -> Tuple[Tree, int]:
     """
-    Fügt zwischen zwei der Kinder eines überfüllten Knotens einen hypothetischen Knoten ein,
-    dessen Sequenz aus dem char-wise Minimum der beiden Kinder entsteht.
+    Inserts a hypothetical node between two of the children of an overflowing node,
+    whose sequence is the char-wise minimum of the two children.
     """
     new_tree = tree.copy()
     overflow_node = find_node_with_overflow(new_tree)
@@ -435,7 +432,7 @@ def add_hypothetical_for_overflow(tree: Tree, next_hypo_id: int) -> Tuple[Tree, 
         return new_tree, next_hypo_id
 
     children = new_tree.children_map[overflow_node]
-    # Wähle das Paar mit geringster Levenshtein-Distanz
+    # Choose the pair with the smallest Levenshtein distance
     best_pair: Tuple[int, int] = (children[0], children[1])
     best_dist = levenshtein_distance(
         new_tree.nodes[children[0]].sequence,
@@ -462,15 +459,15 @@ def add_hypothetical_for_overflow(tree: Tree, next_hypo_id: int) -> Tuple[Tree, 
     new_tree.nodes[h_id] = Node(h_id, hypo_seq, is_hypothetical=True)
     new_tree.children_map[h_id] = []
 
-    # Entferne c1, c2 aus children von overflow_node
+    # Remove c1, c2 from children of overflow_node
     new_tree.children_map[overflow_node] = [
         cid for cid in new_tree.children_map[overflow_node] if cid not in (c1, c2)
     ]
-    # Hänge h an overflow_node
+    # Attach h to overflow_node
     new_tree.children_map[overflow_node].append(h_id)
     new_tree.parent_map[h_id] = overflow_node
 
-    # Hänge c1, c2 unter h
+    # Attach c1, c2 under h
     new_tree.children_map[h_id] = [c1, c2]
     new_tree.parent_map[c1] = h_id
     new_tree.parent_map[c2] = h_id
@@ -480,7 +477,7 @@ def add_hypothetical_for_overflow(tree: Tree, next_hypo_id: int) -> Tuple[Tree, 
 
 def remove_redundant_hypothetical(tree: Tree) -> Tree:
     """
-    Entfernt, falls möglich, einen hypothetischen Knoten, dessen Bypass keine Invalidität erzeugt.
+    Removes, if possible, a hypothetical node whose bypass does not create invalidity.
     """
     new_tree = tree.copy()
     for nid, node in list(new_tree.nodes.items()):
@@ -514,52 +511,52 @@ def remove_redundant_hypothetical(tree: Tree) -> Tree:
 
 
 # ---------------------------
-#  Einzelschritt-Mutation (Leaf-first mit Swap und Root-Handling)
+#  Single Step Mutation (Leaf-first with Swap and Root Handling)
 # ---------------------------
 
 def single_step_mutation(tree: Tree, next_hypo_id: int) -> Tuple[Tree, int, bool]:
     """
-    Führt genau einen Schritt der Restrukturierung aus:
-    1. Suche eine ungültige Kante (Leaf-first).
-       a) Versuche einen Parent-Child-Swap; akzeptiere, falls nach Swap keine Invalidität mehr besteht.
-       b) Sonst: Reattach (inklusive neuem Root, falls nötig).
-       → Wenn in Schritt 1 eine Änderung erfolgte, kehre mit (neuer_tree, next_hypo_id, True) zurück.
-    2. Wenn keine invaliden Kanten mehr existieren, prüfe auf Overflow:
-       → Wenn Overflow existiert, füge hypothetischen Knoten ein und kehre mit (neuer_tree, next_hypo_id, True) zurück.
-    3. Sonst versuche, einen redundanten hypothetischen Knoten zu entfernen:
-       → Wenn entfernt wurde, kehre mit (neuer_tree, next_hypo_id, True) zurück.
-    4. Wenn keine der Operationen mehr anwendbar ist, kehre mit (tree, next_hypo_id, False) zurück.
+    Performs exactly one step of restructuring:
+    1. Find an invalid edge (leaf-first).
+       a) Try a parent-child swap; accept if no more invalidity after swap.
+       b) Otherwise: reattach (including new root if needed).
+       → If a change occurred in step 1, return (new_tree, next_hypo_id, True).
+    2. If no invalid edges exist, check for overflow:
+       → If overflow exists, insert hypothetical node and return (new_tree, next_hypo_id, True).
+    3. Otherwise, try to remove a redundant hypothetical node:
+       → If removed, return (new_tree, next_hypo_id, True).
+    4. If none of the operations are applicable, return (tree, next_hypo_id, False).
     """
-    # 1) Ungültige Kante finden
+    # 1) Find invalid edge
     invalid_edge = find_invalid_edge_leaf_first(tree)
     if invalid_edge is not None:
         p, c = invalid_edge
-        # 1a) Direktes Swap testen
+        # 1a) Try direct swap
         swapped = swap_parent_child(tree, p, c)
         if swapped is not tree and not swapped.has_any_invalid_edge():
             return swapped, next_hypo_id, True
-        # 1b) Reattach (inklusive Root-Erweiterung)
+        # 1b) Reattach (including root extension)
         new_tree, new_next = reattach_leaf(tree, p, c, next_hypo_id)
         return new_tree, new_next, True
 
-    # 2) Overflow prüfen
+    # 2) Check for overflow
     overflow_node = find_node_with_overflow(tree)
     if overflow_node is not None:
         new_tree, new_next = add_hypothetical_for_overflow(tree, next_hypo_id)
         return new_tree, new_next, True
 
-    # 3) Redundanten hypothetischen Knoten entfernen
+    # 3) Remove redundant hypothetical node
     new_tree = remove_redundant_hypothetical(tree)
-    # Prüfen, ob entfernt wurde, indem wir Node-Sets vergleichen
+    # Check if removed by comparing node sets
     if len(new_tree.nodes) < len(tree.nodes):
         return new_tree, next_hypo_id, True
 
-    # 4) Keine Änderung mehr möglich
+    # 4) No further change possible
     return tree, next_hypo_id, False
 
 
 # ---------------------------
-#  Einzelbaum-Iterativer Algorithmus
+#  Single Tree Iterative Algorithm
 # ---------------------------
 
 def reconstruct_single_tree(
@@ -567,19 +564,19 @@ def reconstruct_single_tree(
     seed: Optional[int] = None
 ) -> Tree:
     """
-    Startet mit einem einzelnen zufälligen Baum und wendet wiederholt single_step_mutation
-    an, bis keine Veränderung mehr möglich ist. Gibt den finale stabile Baum zurück.
+    Starts with a single random tree and repeatedly applies single_step_mutation
+    until no further change is possible. Returns the final stable tree.
     """
     if seed is not None:
         random.seed(seed)
 
-    # Nächstverfügbare ID für hypothetische Knoten (negativ)
+    # Next available ID for hypothetical nodes (negative)
     next_hypo_id = -1
 
-    # 1) Initialer Zufallsbaum
+    # 1) Initial random tree
     current_tree = generate_random_tree(alive_sequences)
 
-    # 2) Iteriere, bis stabil
+    # 2) Iterate until stable
     while True:
         new_tree, next_hypo_id, changed = single_step_mutation(current_tree, next_hypo_id)
         if not changed:
@@ -590,16 +587,16 @@ def reconstruct_single_tree(
 
 
 # ---------------------------
-#  Graphviz-Visualisierung
+#  Graphviz Visualization
 # ---------------------------
 
 def visualize_tree(tree: Tree, output_basename: str) -> None:
     """
-    Visualisiert den Baum mit Graphviz. Hypothetische Knoten werden durch
-    einen vorangestellten Asterisk (*) im Label markiert.
-    Speichert als DOT- und PDF-Datei: {output_basename}.gv und {output_basename}.pdf
+    Visualizes the tree with Graphviz. Hypothetical nodes are marked
+    with a leading asterisk (*) in the label.
+    Saves as DOT and PDF files: {output_basename}.gv and {output_basename}.pdf
     """
-    dot = graphviz.Digraph(comment="Rekonstruierter Baum", format="pdf")
+    dot = graphviz.Digraph(comment="Reconstructed Tree", format="pdf")
     dot.attr("node", shape="ellipse")
 
     for nid, node in tree.nodes.items():
@@ -612,15 +609,15 @@ def visualize_tree(tree: Tree, output_basename: str) -> None:
 
     dot_filename = f"{output_basename}.gv"
     dot.render(dot_filename, cleanup=True)
-    print(f"Graphviz-Dateien erzeugt: '{dot_filename}' und '{output_basename}.pdf'")
+    print(f"Graphviz files generated: '{dot_filename}' and '{output_basename}.pdf'")
 
 
 def print_tree(tree: Tree) -> None:
     """
-    Gibt den Baum in Textform aus: node_id (Sequence) → parent, children.
-    Hypothetische Knoten werden markiert.
+    Prints the tree in text form: node_id (Sequence) → parent, children.
+    Hypothetical nodes are marked.
     """
-    print("Baum-Struktur (node_id: sequence) → [children_ids]")
+    print("Tree structure (node_id: sequence) → [children_ids]")
     for nid, node in tree.nodes.items():
         parent = tree.parent_map.get(nid)
         children = tree.children_map.get(nid, [])
@@ -629,31 +626,31 @@ def print_tree(tree: Tree) -> None:
 
 
 # ---------------------------
-#  Main-Funktion
+#  Main Function
 # ---------------------------
 
 def main(config: Config) -> None:
-    # 1) JSON einlesen
+    # 1) Read JSON
     raw_nodes = load_json_nodes(config.input_path)
     alive_sequences = filter_alive_nodes(raw_nodes)
     if not alive_sequences:
-        print("Keine lebendigen Knoten gefunden. Abbruch.")
+        print("No living nodes found. Aborting.")
         return
 
-    print(f"Anzahl lebendiger Knoten: {len(alive_sequences)}")
-    print("Starte iterative Baumrekonstruktion...")
+    print(f"Number of living nodes: {len(alive_sequences)}")
+    print("Starting iterative tree reconstruction...")
 
-    # 2) Baum rekonstruieren
+    # 2) Reconstruct tree
     best_tree = reconstruct_single_tree(
         alive_sequences=alive_sequences,
         seed=config.seed
     )
 
-    # 3) Ergebnis textuell ausgeben
-    print("\n=== Rekonstruierter Baum (Text) ===")
+    # 3) Output result as text
+    print("\n=== Reconstructed Tree (Text) ===")
     print_tree(best_tree)
 
-    # 4) Ergebnis mit Graphviz visualisieren
+    # 4) Visualize result with Graphviz
     visualize_tree(best_tree, config.output_graph_basename)
 
 
